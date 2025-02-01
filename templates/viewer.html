@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Live Stream</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
+</head>
+<body>
+    <h2>Live Video Feed</h2>
+    <img id="videoFeed" style="width:100%; max-width:600px;"/>
+
+    <script>
+        const socket = io();
+        const img = document.getElementById("videoFeed");
+
+        socket.emit('request_video');  // Request video feed
+
+        socket.on('video_frame', (data) => {
+            img.src = "data:image/jpeg;base64," + data.frame;  // Display frame
+        });
+    </script>
+</body>
+</html>

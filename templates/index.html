@@ -2,6 +2,7 @@
 <html>
 <head>
     <title>Mobile Camera Stream</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
 </head>
 <body>
     <h2>Live Video Streaming from Mobile</h2>
@@ -9,27 +10,23 @@
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
+        const socket = io();  // Connect to Flask WebSocket server
+
         async function startStreaming() {
             const video = document.getElementById("video");
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-
             video.srcObject = stream;
 
-            const canvas = document.getElementById("canvas");
-            const context = canvas.getContext("2d");
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
 
             function sendFrame() {
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
-                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
                 const imageData = canvas.toDataURL("image/jpeg");
-
-                fetch("/upload_frame", {
-                    method: "POST",
-                    body: JSON.stringify({ frame: imageData }),
-                    headers: { "Content-Type": "application/json" }
-                });
+                socket.emit('frame', imageData);  // Send frame via WebSocket
 
                 requestAnimationFrame(sendFrame);
             }
