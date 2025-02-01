@@ -1,39 +1,86 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Mobile Camera Stream</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
-</head>
-<body>
-    <h2>Live Video Streaming from Mobile</h2>
-    <video id="video" autoplay playsinline></video>
-    <canvas id="canvas" style="display:none;"></canvas>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Video Streaming</title>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
     <script>
-        const socket = io();  // Connect to Flask WebSocket server
+        const socket = io.connect("http://127.0.0.1:5000");
 
-        async function startStreaming() {
-            const video = document.getElementById("video");
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            video.srcObject = stream;
+        let localStream;
+        let peerConnection;
+        const videoElement = document.getElementById('videoElement'); // Video element to display the stream
 
-            const canvas = document.createElement("canvas");
-            const ctx = canvas.getContext("2d");
+        // Create peer connection configuration
+        const configuration = {
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        };
 
-            function sendFrame() {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Get the media stream from the webcam
+        async function startStream() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                videoElement.srcObject = localStream;
 
-                const imageData = canvas.toDataURL("image/jpeg");
-                socket.emit('frame', imageData);  // Send frame via WebSocket
+                // Initialize peer connection
+                peerConnection = new RTCPeerConnection(configuration);
 
-                requestAnimationFrame(sendFrame);
+                // Add tracks from the local stream to the peer connection
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+
+                // When ICE candidate is found, send it to the other peer
+                peerConnection.onicecandidate = event => {
+                    if (event.candidate) {
+                        socket.emit('candidate', event.candidate);
+                    }
+                };
+
+                // When remote stream is received, display it
+                peerConnection.ontrack = event => {
+                    const remoteStream = event.streams[0];
+                    document.getElementById('remoteVideo').srcObject = remoteStream;
+                };
+
+            } catch (err) {
+                console.error('Error accessing media devices.', err);
             }
-            sendFrame();
         }
 
-        startStreaming();
+        // Sending offer to establish connection
+        async function createOffer() {
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+            socket.emit('offer', offer);
+        }
+
+        // When receiving an offer, create and send an answer
+        socket.on('offer', async (offer) => {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            socket.emit('answer', answer);
+        });
+
+        // Handle the answer from the remote peer
+        socket.on('answer', async (answer) => {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+        });
+
+        // Handle ICE candidates from the remote peer
+        socket.on('candidate', (candidate) => {
+            peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        });
+
+        // Start the stream and connection process
+        startStream().then(createOffer);
     </script>
+</head>
+<body>
+    <h2>WebRTC Video Stream</h2>
+    <video id="videoElement" autoplay muted></video> <!-- Local Stream -->
+    <video id="remoteVideo" autoplay></video> <!-- Remote Stream -->
 </body>
 </html>
