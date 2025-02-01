@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mobile Camera Stream</title>
+</head>
+<body>
+    <h2>Live Video Streaming from Mobile</h2>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <script>
+        async function startStreaming() {
+            const video = document.getElementById("video");
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+
+            video.srcObject = stream;
+
+            const canvas = document.getElementById("canvas");
+            const context = canvas.getContext("2d");
+
+            function sendFrame() {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                const imageData = canvas.toDataURL("image/jpeg");
+
+                fetch("/upload_frame", {
+                    method: "POST",
+                    body: JSON.stringify({ frame: imageData }),
+                    headers: { "Content-Type": "application/json" }
+                });
+
+                requestAnimationFrame(sendFrame);
+            }
+            sendFrame();
+        }
+
+        startStreaming();
+    </script>
+</body>
+</html>
